@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"math/big"
+	"regexp"
 	"strings"
 )
 
@@ -10,8 +11,17 @@ import (
 // Using a string avoids float precision issues when crossing JSON and DB boundaries.
 type Amount string
 
+// decimalRe matches a plain, optionally-signed decimal number such as "100",
+// "100.5", or "-0.0001". It deliberately excludes formats that big.Rat.SetString
+// would otherwise accept — fractions ("1/3"), exponents ("1e3"), and surrounding
+// whitespace — none of which are valid amounts in our API contract.
+var decimalRe = regexp.MustCompile(`^[+-]?[0-9]+(\.[0-9]+)?$`)
+
 // ParseAmount parses a decimal string into an Amount, rejecting negative values.
 func ParseAmount(s string) (Amount, error) {
+	if !decimalRe.MatchString(s) {
+		return "", fmt.Errorf("invalid amount %q: must be a plain decimal number", s)
+	}
 	r, ok := new(big.Rat).SetString(s)
 	if !ok {
 		return "", fmt.Errorf("invalid amount %q: not a decimal number", s)

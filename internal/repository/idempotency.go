@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/benjamin-benny/wallet-transfer/internal/domain"
 )
 
 // IdempotencyRecord is the persisted state for a single idempotency key.
@@ -79,7 +81,7 @@ func (r *IdempotencyRepository) UpdateResponse(
 		SET transfer_id = $2, response_status = $3, response_body = $4
 		WHERE key = $1`
 
-	_, err := tx.Exec(ctx, q,
+	tag, err := tx.Exec(ctx, q,
 		key,
 		pgtype.UUID{Bytes: transferID, Valid: true},
 		status,
@@ -87,6 +89,9 @@ func (r *IdempotencyRepository) UpdateResponse(
 	)
 	if err != nil {
 		return fmt.Errorf("IdempotencyRepository.UpdateResponse: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("idempotency record %q vanished before UpdateResponse: %w", key, domain.ErrInvariantViolation)
 	}
 	return nil
 }
